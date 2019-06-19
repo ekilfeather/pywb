@@ -1,12 +1,44 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
 from .base_config_test import BaseConfigTest, fmod_sl
+from pywb.warcserver.test.testutils import HttpBinLiveTests
+
+from pywb.utils.geventserver import GeventServer
 import pytest
+import sys
+import six
 
 
 # ============================================================================
-class TestLiveRewriter(BaseConfigTest):
+def header_test_server(environ, start_response):
+    body = b'body'
+    value = u'⛄'
+    value = value.encode('utf-8')
+    if six.PY3:
+        value = value.decode('latin-1')
+
+    headers = []
+    if environ['PATH_INFO'] == '/unicode':
+        headers = [('Content-Length', str(len(body))),
+                   ('x-utf-8', value)]
+
+    start_response('200 OK', headers=headers)
+    return [body]
+
+
+# ============================================================================
+class TestLiveRewriter(HttpBinLiveTests, BaseConfigTest):
     @classmethod
     def setup_class(cls):
+        cls.lint_app = False
         super(TestLiveRewriter, cls).setup_class('config_test.yaml')
+        cls.test_serv = GeventServer(header_test_server)
+
+    @classmethod
+    def teardown_class(cls):
+        cls.test_serv.stop()
+        super(TestLiveRewriter, cls).teardown_class()
 
     def test_live_live_1(self, fmod_sl):
         headers = [('User-Agent', 'python'), ('Referer', 'http://localhost:80/live/other.example.com')]
@@ -26,14 +58,44 @@ class TestLiveRewriter(BaseConfigTest):
         assert resp.status_int == 200
 
     def test_live_anchor_encode(self, fmod_sl):
-        resp = self.get('/live/{0}httpbin.org/anything/abc%23%23xyz', fmod_sl)
-        assert '"http://httpbin.org/anything/abc##xyz"' in resp.text
+        resp = self.get('/live/{0}httpbin.org/get?val=abc%23%23xyz', fmod_sl)
+        assert 'get?val=abc%23%23xyz"' in resp.text
+        assert '"val": "abc##xyz"' in resp.text
+        #assert '"http://httpbin.org/anything/abc##xyz"' in resp.text
         assert resp.status_int == 200
 
     def test_live_head(self, fmod_sl):
-        resp = self.head('/live/{0}httpbin.org/anything/foo', fmod_sl)
-        #assert '"http://httpbin.org/anything/foo"' in resp.text
+        resp = self.head('/live/{0}httpbin.org/get?foo=bar', fmod_sl)
         assert resp.status_int == 200
+
+    @pytest.mark.skipif(sys.version_info < (3,0), reason='does not respond in 2.7')
+    def test_live_bad_content_length(self, fmod_sl):
+        resp = self.get('/live/{0}httpbin.org/response-headers?content-length=149,149', fmod_sl, status=200)
+        assert resp.headers['Content-Length'] == '149'
+
+        resp = self.get('/live/{0}httpbin.org/response-headers?Content-Length=xyz', fmod_sl, status=200)
+        assert resp.headers['Content-Length'] == '90'
+
+    @pytest.mark.skipif(sys.version_info < (3,0), reason='does not respond in 2.7')
+    def test_live_bad_content_length_with_range(self, fmod_sl):
+        resp = self.get('/live/{0}httpbin.org/response-headers?content-length=149,149', fmod_sl,
+                        headers={'Range': 'bytes=0-'}, status=206)
+        assert resp.headers['Content-Length'] == '149'
+        assert resp.headers['Content-Range'] == 'bytes 0-148/149'
+
+        resp = self.get('/live/{0}httpbin.org/response-headers?Content-Length=xyz', fmod_sl,
+                        headers={'Range': 'bytes=0-'}, status=206)
+        assert resp.headers['Content-Length'] == '90'
+        assert resp.headers['Content-Range'] == 'bytes 0-89/90'
+
+    def test_custom_unicode_header(self, fmod_sl):
+        value = u'⛄'
+        value = value.encode('utf-8')
+        if six.PY3:
+            value = value.decode('latin-1')
+
+        resp = self.get('/live/{0}http://localhost:%s/unicode' % self.test_serv.port, fmod_sl)
+        assert resp.headers['x-utf-8'] == value
 
     def test_live_live_frame(self):
         resp = self.testapp.get('/live/http://example.com/')
@@ -62,3 +124,22 @@ class TestLiveRewriter(BaseConfigTest):
     def test_deflate(self, fmod_sl):
         resp = self.get('/live/{0}http://httpbin.org/deflate', fmod_sl)
         assert b'"deflated": true' in resp.body
+
+    def test_live_origin_and_referrer(self, fmod_sl):
+        headers = {'Referer': 'http://localhost:80/live/{0}http://example.com/test'.format(fmod_sl),
+                   'Origin': 'http://localhost:80'
+                  }
+
+        resp = self.get('/live/{0}http://httpbin.org/get?test=headers', fmod_sl, headers=headers)
+
+        assert resp.json['headers']['Referer'] == 'http://example.com/test'
+        assert resp.json['headers']['Origin'] == 'http://example.com'
+
+    def test_live_origin_no_referrer(self, fmod_sl):
+        headers = {'Origin': 'http://localhost:80'}
+
+        resp = self.get('/live/{0}http://httpbin.org/get?test=headers', fmod_sl, headers=headers)
+
+        assert resp.json['headers']['Origin'] == 'http://httpbin.org'
+
+

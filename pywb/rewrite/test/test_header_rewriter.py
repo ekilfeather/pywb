@@ -43,15 +43,15 @@ class TestHeaderRewriter(object):
         res = """\
 HTTP/1.0 200 OK\r\n\
 Date: Fri, 03 Jan 2014 03:03:21 GMT\r\n\
-Content-Length: 5\r\n\
+X-Archive-Orig-Content-Length: 5\r\n\
 Content-Type: text/html;charset=UTF-8\r\n\
 """
         rwinfo = self.do_rewrite('200 OK', headers)
         http_headers = DefaultHeaderRewriter(rwinfo)()
         assert str(http_headers) == res
 
-        assert rwinfo.text_type == 'html'
-        assert rwinfo.charset == 'utf-8'
+        assert rwinfo.text_type == None
+        assert rwinfo.charset == None
 
     def test_header_rewrite_redirect(self):
         headers = [('Connection', 'close'),
@@ -111,7 +111,8 @@ X-Archive-Orig-Transfer-Encoding: chunked\r\n\
                    ('Set-Cookie', 'foo=bar; Path=/; abc=123; Path=/path.html'),
                    ('Content-Encoding', 'gzip'),
                    ('Transfer-Encoding', 'chunked'),
-                   ('X-Custom', 'test')]
+                   ('X-Custom', 'test'),
+                   ('Status', '200')]
 
         rwinfo = self.do_rewrite('200 OK', headers)
         http_headers = DefaultHeaderRewriter(rwinfo)()
@@ -126,7 +127,9 @@ X-Archive-Orig-Transfer-Encoding: chunked\r\n\
         assert(('X-Archive-Orig-Transfer-Encoding', 'chunked') in http_headers.headers)
         assert(('X-Custom', 'test') in http_headers.headers)
 
-        assert(len(http_headers.headers) == 7)
+        assert(('X-Archive-Orig-Status', '200') in http_headers.headers)
+
+        assert(len(http_headers.headers) == 8)
 
         assert rwinfo.text_type == None
         assert rwinfo.charset == None

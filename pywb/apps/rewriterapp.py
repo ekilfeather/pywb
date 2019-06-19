@@ -103,6 +103,9 @@ class RewriterApp(object):
         else:
             self.csp_header = None
 
+        # deprecated: Use X-Forwarded-Proto header instead!
+        self.force_scheme = config.get('force_scheme')
+
     def add_csp_header(self, wb_url, status_headers):
         if self.csp_header and wb_url.mod == self.replay_mod:
             status_headers.headers.append(self.csp_header)
@@ -130,6 +133,10 @@ class RewriterApp(object):
                     raise UpstreamException(400, url=wb_url.url, details='Invalid Accept-Datetime')
                     #return WbResponse.text_response('Invalid Accept-Datetime', status='400 Bad Request')
 
+                wb_url.type = wb_url.REPLAY
+
+            elif 'pywb_proxy_default_timestamp' in environ:
+                wb_url.timestamp = environ['pywb_proxy_default_timestamp']
                 wb_url.type = wb_url.REPLAY
 
         return is_timegate
@@ -173,6 +180,12 @@ class RewriterApp(object):
 
         content_length = (record.http_headers.
                           get_header('Content-Length'))
+
+        if content_length is None:
+            return
+
+        content_length = content_length.split(',')[0]
+
         try:
             content_length = int(content_length)
             if not range_end:
@@ -199,9 +212,27 @@ class RewriterApp(object):
         except (ValueError, TypeError):
             pass
 
+    def send_redirect(self, new_path, url_parts, urlrewriter):
+        scheme, netloc, path, query, frag = url_parts
+        path = new_path
+        url = urlunsplit((scheme, netloc, path, query, frag))
+        resp = WbResponse.redir_response(urlrewriter.rewrite(url),
+                                         '307 Temporary Redirect')
+
+        if self.enable_memento:
+            resp.status_headers['Link'] = MementoUtils.make_link(url, 'original')
+
+        return resp
+
     def render_content(self, wb_url, kwargs, environ):
         wb_url = wb_url.replace('#', '%23')
         wb_url = WbUrl(wb_url)
+
+        proto = environ.get('HTTP_X_FORWARDED_PROTO', self.force_scheme)
+
+        if proto:
+            environ['wsgi.url_scheme'] = proto
+
         is_timegate = self._check_accept_dt(wb_url, environ)
 
         host_prefix = self.get_host_prefix(environ)
@@ -232,20 +263,13 @@ class RewriterApp(object):
 
         url_parts = urlsplit(wb_url.url)
         if not url_parts.path:
-            scheme, netloc, path, query, frag = url_parts
-            path = '/'
-            url = urlunsplit((scheme, netloc, path, query, frag))
-            resp = WbResponse.redir_response(urlrewriter.rewrite(url),
-                                             '307 Temporary Redirect')
-
-            if self.enable_memento:
-                resp.status_headers['Link'] = MementoUtils.make_link(url, 'original')
-
-            return resp
+            return self.send_redirect('/', url_parts, urlrewriter)
 
         self.unrewrite_referrer(environ, full_prefix)
 
         urlkey = canonicalize(wb_url.url)
+
+        environ['pywb.host_prefix'] = host_prefix
 
         if self.use_js_obj_proxy:
             content_rw = self.js_proxy_rw
@@ -282,14 +306,27 @@ class RewriterApp(object):
             details = dict(args=kwargs, error=error)
             raise UpstreamException(r.status_code, url=wb_url.url, details=details)
 
+        cdx = CDXObject(r.headers.get('Warcserver-Cdx').encode('utf-8'))
+
+        cdx_url_parts = urlsplit(cdx['url'])
+
+        if cdx_url_parts.path.endswith('/') and not url_parts.path.endswith('/'):
+            # add trailing slash
+            new_path = url_parts.path + '/'
+
+            try:
+                r.raw.close()
+            except:
+                pass
+
+            return self.send_redirect(new_path, url_parts, urlrewriter)
+
         stream = BufferedReader(r.raw, block_size=BUFF_SIZE)
         record = self.loader.parse_record_stream(stream,
                                                  ensure_http_headers=True)
 
         memento_dt = r.headers.get('Memento-Datetime')
         target_uri = r.headers.get('WARC-Target-URI')
-
-        cdx = CDXObject(r.headers.get('Warcserver-Cdx').encode('utf-8'))
 
         #cdx['urlkey'] = urlkey
         #cdx['timestamp'] = http_date_to_timestamp(memento_dt)
@@ -323,7 +360,7 @@ class RewriterApp(object):
 
                 return resp
 
-        self._add_custom_params(cdx, r.headers, kwargs)
+        self._add_custom_params(cdx, r.headers, kwargs, record)
 
         if self._add_range(record, wb_url, range_start, range_end):
             wb_url.mod = 'id_'
@@ -342,6 +379,8 @@ class RewriterApp(object):
                                                        top_url,
                                                        environ,
                                                        framed_replay,
+                                                       coll=kwargs.get('coll', ''),
+                                                       replay_mod=self.replay_mod,
                                                        config=self.config))
 
         cookie_rewriter = None
@@ -351,7 +390,7 @@ class RewriterApp(object):
 
         urlrewriter.rewrite_opts['ua_string'] = environ.get('HTTP_USER_AGENT')
 
-        result = content_rw(record, urlrewriter, cookie_rewriter, head_insert_func, cdx)
+        result = content_rw(record, urlrewriter, cookie_rewriter, head_insert_func, cdx, environ)
 
         status_headers, gen, is_rw = result
 
@@ -619,7 +658,7 @@ class RewriterApp(object):
     def get_cookie_key(self, kwargs):
         raise NotImplemented()
 
-    def _add_custom_params(self, cdx, headers, kwargs):
+    def _add_custom_params(self, cdx, headers, kwargs, record):
         pass
 
     def get_top_frame_params(self, wb_url, kwargs):

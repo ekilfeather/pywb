@@ -81,13 +81,28 @@ class TestWbIntegration(BaseConfigTest):
 
         assert 'Content-Security-Policy' not in resp.headers
 
+    def test_replay_content_head(self, fmod):
+        resp = self.head('/pywb/20140127171238{0}/http://www.iana.org/', fmod, status=200)
+        assert not resp.headers.get('Content-Length')
+
+    def test_replay_content_head_non_zero_content_length_match(self):
+        resp = self.testapp.get('/pywb/id_/http://www.iana.org/_js/2013.1/jquery.js', status=200)
+        length = resp.content_length
+
+        # Content-Length included if non-zero
+        resp = self.testapp.head('/pywb/id_/http://www.iana.org/_js/2013.1/jquery.js', status=200)
+
+        #assert resp.headers['Content-Length'] == length
+        assert resp.content_length == length
+
     def test_replay_content(self, fmod):
         resp = self.get('/pywb/20140127171238{0}/http://www.iana.org/', fmod)
         self._assert_basic_html(resp)
 
         assert '"20140127171238"' in resp.text, resp.text
         assert 'wombat.js' in resp.text
-        assert 'new _WBWombat' in resp.text, resp.text
+        assert '_WBWombatInit' in resp.text, resp.text
+        assert 'wbinfo.enable_auto_fetch = false;' in resp.text
         assert '/pywb/20140127171238{0}/http://www.iana.org/time-zones"'.format(fmod) in resp.text
 
         if fmod == 'mp_':
@@ -406,7 +421,7 @@ class TestWbIntegration(BaseConfigTest):
         assert resp.content_length > 0
 
     def test_static_nested_dir(self):
-        resp = self.testapp.get('/static/fonts/font-awesome/fontawesome-webfont.woff')
+        resp = self.testapp.get('/static/fonts/font-awesome/fa-brands-400.eot')
         assert resp.status_int == 200
         assert resp.content_length > 0
 

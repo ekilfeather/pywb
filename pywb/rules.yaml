@@ -34,6 +34,10 @@ default_filters:
         - match: '[?&]utm_[^=]+=[^&]+(?=&|$)'
           replace: ''
 
+        # additional callback=jsonpCallbackXYZ
+        - match: '[?&](callback=jsonp)[^&]+(?=&|$)'
+          replace: '\1'
+
         # remove jquery callback dynamic timestamp
         - match: '[?&]((?:\w+)=jquery)[\d]+_[\d]+'
           replace: '\1'
@@ -78,6 +82,9 @@ rules:
       fuzzy_lookup:
         match: '("(?:cursor|cursorindex)":["\d\w]+)'
         find_all: true
+
+    - url_prefix: 'com,facebook)/ajax/pagelet/generic.php/profiletimeline'
+      fuzzy_lookup: 'com,facebook\)/.*[?&](__adt=[^&]+).*[&]data=(?:.*?(?:[&]|(profile_id|pagelet_token)[^,]+))'
 
     - url_prefix: 'com,facebook)/ajax/pagelet/generic.php/'
 
@@ -140,6 +147,12 @@ rules:
       fuzzy_lookup:
         match: '("q[\d]+":|after:\\"[^"]+)'
         find_all: true
+
+    - url_prefix: 'com,facebook)/pages_reaction_units/more'
+
+      fuzzy_lookup:
+          - page_id
+          - cursor
 
     - url_prefix: 'com,facebook)/'
 
@@ -315,6 +328,11 @@ rules:
           - videoFileId
           - signature
 
+    - url_prefix: 'net,akamaized,gcs-vimeo)/'
+
+      fuzzy_lookup:
+        match: '([/\d]+\.mp4)$'
+        replace: '.net/'
 
     # vine
     #=================================================================
@@ -421,6 +439,9 @@ rules:
 
             - match: 'yt\.setConfig.*PLAYER_CONFIG.*args":\s*{'
               replace: '{0} "dash": "0", dashmpd: "", '
+
+            - match: '"player":.*"args":{'
+              replace: '{0}"dash":"0","dashmpd":"",'
 
     # testing rules -- not for valid domain
     #=================================================================

@@ -1,3 +1,189 @@
+pywb 2.2.20190410 changelist
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+* Improved rewriting of JSONP, support matching JSONP with ``//`` comments (fixes #459)
+
+
+pywb 2.2.20190311 changelist
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+* Support for setting timestamp in proxy mode via ``--proxy-default-timestamp`` (fixes #452)
+* Remove any ``WB_wombat_`` found in POST requests from old versions of pywb.
+* Fixes new query UI when loading traditional calendar ``/*/<url>`` pages (#455, #456)
+
+
+pywb 2.2.x changelist
+~~~~~~~~~~~~~~~~~~~~~
+
+* New Versioning System: (#445)
+    - Switching to hybrid semantic / calendar ``major.minor.yyyymmdd`` versioning.
+    - The ``major.minor`` version will be updated for larger changes.
+    - The ``.yyyymmdd`` date component will be updated for smaller incremental releases, for fidelity improvements and smaller bug fixes.
+    
+
+* Auto Fetch System:
+    - Added ``picture > source[srcset]`` extraction and increased the robustness of relative srcset URLs resolution (#415)
+    - Enabled auto-fetching of video, audio resources (#427)
+    - Expoxed AutoFetchWorker api in proxy mode to allow external JS to initiate checks (#389)
+
+* Build / CI Improvements:
+    - Tweaked usage of wr-tests in CI (#431)
+    - Ensured that usage of XVFB works on travis.ci (#436)
+    - Updated Docker image to support
+    - Python 3.7 support and CI testing (#447)
+
+* Docker:
+    - Updated Docker image to Python 3.7.2, match docker user uid/gid to that of existing volume (#446)
+    - Add documentation for using Docker image and automated images (#448)
+
+* Fuzzy Matching:
+    - Added an additional Facebook rule targeting timeline replay (#440)
+
+* Memento:
+    - Fixed regression in FrontendApp when handling TimeMap requests (#423)
+
+* Recording:
+    - Remove Transer-Encoding from internal response (#437)
+    - If brotli decoding package can't be loaded, remove ``br`` from ``Accept-Encoding`` header (#444)
+
+* Replay / Fidelity Improvements:
+    - Wombat now uses the actual page scheme instead of defaulting to http when extracting the original url (#404)
+    - Improved URL rewriting in web workers (#420)
+    - Improved replay of content coming from a frameset's frame (#438)
+    - Updated rules for facebook (#440)
+    - Introduce new banner behavior and ensured that banner does not become stuck displaying "Loading..." (#418)
+
+* Server-Side Rewriting:
+    - Improved the rewriting process of HTTP headers that are encoded in the non-standard ``UTF-8`` encoding (#402)
+    - Improved the JavaScript rewriter's rewrites of the ``location`` symbol in order to avoid rewriting ``$location`` (#403)
+    - Added an additional check of ``text/html`` content to ensure that it is actually ``html`` (#428)
+    - Fixed HTML detection for UTF-8 files starting with BOM (#441)
+    - Fixed parsing of invalid conditional comments, eg. treat '<![endif]-->' as '<![endif]>' (#441)
+
+* UI:
+   -  New Query UI with support for prefix queries, forms for advanced search via cdx server api, incremental results loading (#421)
+
+
+
+
+
+pywb 2.1.0 changelist
+~~~~~~~~~~~~~~~~~~~~~
+
+* Replay Fidelity Improvements:
+   - Improved wombat web worker rewriting overrides, use custom modifier ``wkr_`` (#351)
+   - Added checks to wombat that preserve the behavior of non-wombat added polyfills to native functions (#350)
+   - Framed replay: Ensured the page title and favicon are displayed in the top-frame (#356, #369)
+   - Improved replay of request sent as ``text/html`` but are actually ``application/json``` (#367)
+   - Added replay of compressed resources by forcing decompression if the UA did not indicate it could handle the resources encoding (#372)
+   - Added ``window.origin``, and ``setTimeout``, ``setInterval`` overrides to wombat to handle the non-function callback case (#381)
+   - Added ``CSSStyleSheet.insertRule`` and ```Text``` overrides to wombat improve rewriting of dynamically added/modification of CSS (#382)
+   - Remove extra ``window.frames`` override to avoid extra override if ``window.frames === window`` (#383)
+   - Wombat inited via ``window._WBWombatInit(wbinfo);``, allows for reinit if inited 'synethically' and not from the page html insert (#383)
+   - Added ``document.evaluate`` override in-order to deproxy the context node (#385)
+   - Optimized argument de-proxying in wombat (#385)
+   - Improved iframe srcdoc rewriting in wombat (#386)
+   - Improved rewriting strings of full HTML by making the check case insensitive and looking for ``<!doctype html`` in wombat (#398)
+
+* Auto Fetch System: Background image srcset and media query fetching (#359, #379, #378, #397):
+   - Added image srcset and media query preservation system to wombat
+   - Added ``--proxy-enable-wombat`` cli flag to enable the inject of ``wombatProxyMode.js`` in proxy mode (default: false)
+   - Added ``--enable-auto-fetch`` cli flag to enable the auto fetch web worker system both url rewrite and proxy modes (default: false)
+   - Added ``FrontEndApp.proxy_fetch()`` to allow the auto fetch worker to request cross-origin style sheets
+
+* Fuzzy Matching:
+    - Decreased the aggressiveness of fuzzy matching (#362)
+    - Added an additional Facebook rule targeting timeline replay (#363)
+    - Added vimeo rule that canonicalizes the variable ```hmac/timestamp``` portion of url (#375)
+
+* Server-Side Rewriting:
+    - Refactored the regular expression rewriters in-order to avoid multiple initialization (#354)
+    - Improved unicode URL rewriting (#361, #376, #377, #380)
+    - Improved cookie rewriting in framed replay mode (#386)
+    - Improved handling of bad content-length HTTP header (#386)
+    - Fix parsing of self-closing <script> and <style> tags and rewrite SVG xlink:href (#392)
+    - Ensure 'Status' header is prefix-rewritten
+    - Support using ``X-Forwarded-Proto`` header to specify scheme for URL rewriting (#395)
+
+* Indexing:
+    - Ensure that WARC/0.18 metadata records with mime = ``text/anvl`` are not replayed
+
+* Recording:
+    - Added an option to filter the source collection (#368)
+
+* Misc Changes:
+    - Added Github Issue Templates (#353)
+    - Added replay testing to ci via webrecorder-tests (#355)
+    - Support deploying pywb under a prefix, non-root (#373)
+
+* Documentation improvements:
+   - Improved cli help message (#360)
+   - Fixed documentation enumeration bug (#364)
+   - Add documentation for auto-fetch system (#394)
+
+
+pywb 2.0.4 changelist
+~~~~~~~~~~~~~~~~~~~~~
+
+* Replay Fidelity Improvements:
+   - Ensure title-only change event correctly handled by top-frame banner (#327)
+   - Improved wombat ``document.write`` and ``document.writeln`` overrides to account for the variadic case (#325)
+   - Improved wombat ``postMessage`` override logic of determining correct target origin (#328 and #338)
+   - Improved server-side rewriting of ``link[rel=preload]`` (#332)
+   - Improved server-side and client-side rewriting of "super relative" script src values ``script[src=path/it.php?js]`` (#334)
+   - Improved wombat un-rewrite regular expression (#332)
+   - Improved wombat ``Node.[appendChild|replaceChild|insertBefore]`` overrides to account for edge cases (#332)
+   - Added ``MouseEvent`` override to wombat (#332)
+   - Added ``insertAdjacentElement`` override to wombat (#332)
+   - Added client-side rewriting of ``link[rel=preload]`` and ``link[rel=import]`` to wombat (#332)
+   - Added FontFace override to wombat (#340)
+   - Added server-side rewriting of ``link[rel=import]`` (#334)
+   - Added SVG filter attribute rewriting to wombat (#341)
+   - Improved detection of ServiceWorker JS, use ``sw_`` modifier which performs no rewriting but adds ``Service-Worker-Allowed`` header.
+   - Don't bind already overridden ``requestAnimationFrame/clearAnimationFrame`` functions via JS object proxy (#350)
+   - Don't reinit wombat in same window if new document is imported (#339)
+   - Cookies: Use default mod ``mp_`` for client-side rewriting to ensure cookies set correctly on client-side documents (#330)
+
+* Server-Side Rewriting:
+   - Flash: Improved Rewriting for AMF, supporting py2 and py3 (#321)
+   - Improved ``Origin`` header detection: Detect from ``Referer`` header if available (#329)
+   - Expand JSONP matching if url contains 'callback=jsonp' (#336)
+   - Ensure entity-escaped urls are rewritten, with escaping preserved (#337)
+
+* Redirect Improvements:
+   - Improved self-redirect detection for adjacent self-redirect capture results, avoiding self-redirect loops (#345)
+   - Fix possible leak when handling self-redirects
+   - Add slash-preserving redirect, if original ended in '/', ensure replayed version also ends with '/' (#344, #346)
+
+* Misc Fixes:
+   - Testing: Run local ``httpbin`` for any ``httpbin.org`` or ``test.httpbin.org`` tests to avoid external dependency.
+   - Indexing: Avoid indexing error in py2 by decoding in utf-8 if warc has non-ascii target url (#312)
+   - Gevent: Preserve %-escaped request url via ``REQUEST_URI`` (if available) to pass correct url to live upstream.
+
+* Proxy Mode Options (#316, #317):
+   - Add ``use_banner`` option, if false, disables banner insert in proxy mode (default: true)
+   - Add ``use_head_insert`` option, if false, disables injecting ``head_insert.html`` in proxy mode (default: true)
+   - Add ``FrontEndApp.proxy_route_request()`` to allow more customized proxy routing (default: route to fixed default collection)
+   - Expand proxy mode docs
+
+
+pywb 2.0.3 changelist
+~~~~~~~~~~~~~~~~~~~~~
+
+* Miscelaneous fixes:
+   - Fixes for Memento Aggregation when no timeout specified (#310)
+   - Fix HEAD request for replay (#309)
+   - Redis Index: always decode to native string format (decode_respones=True)
+   - Test fixes: Support latest fakeredis, more consistent tests (#313)
+   - Support forcing scheme via ``force_scheme: https`` config option (#314)
+   - Fix typo in rewrite_amf.py (#308)
+
+* Documentation improvements:
+   - Add docs for nginx deployment (#314)
+   - Fix typo in memento docs (#307)
+   - Mention timeout property Warcserver docs (#310)
+
+
 pywb 2.0.2 changelist
 ~~~~~~~~~~~~~~~~~~~~~
 

@@ -38,6 +38,10 @@ import six
 
 #=================================================================
 class BaseCDXWriter(object):
+    # To ensure we do not index metadata mime types
+    # from older WARC specs (Heritrix 1.x) that collide with response records
+    METADATA_NO_INDEX_TYPES = ('text/anvl', )
+
     def __init__(self, out):
         self.out = codecs.getwriter('utf-8')(out)
         #self.out = out
@@ -50,10 +54,15 @@ class BaseCDXWriter(object):
         if not entry.get('url') or not entry.get('urlkey'):
             return
 
-        if entry.record.rec_type == 'warcinfo':
+        if self._is_skipped(entry):
             return
 
         self.write_cdx_line(self.out, entry, filename)
+
+    def _is_skipped(self, entry):
+        if entry.record.rec_type == 'warcinfo':
+            return True
+        return entry.record.rec_type == 'metadata' and entry['mime'] in self.METADATA_NO_INDEX_TYPES
 
     def __exit__(self, *args):
         return False
@@ -99,7 +108,10 @@ class CDX09(object):
         out.write(' ')
         out.write(entry['timestamp'])
         out.write(' ')
-        out.write(entry['url'])
+        try:
+            out.write(entry['url'])
+        except UnicodeDecodeError:
+            out.write(entry['url'].decode('utf-8'))
         out.write(' ')
         out.write(entry['mime'])
         out.write(' ')
@@ -123,7 +135,10 @@ class CDX11(object):
         out.write(' ')
         out.write(entry['timestamp'])
         out.write(' ')
-        out.write(entry['url'])
+        try:
+            out.write(entry['url'])
+        except UnicodeDecodeError:
+            out.write(entry['url'].decode('utf-8'))
         out.write(' ')
         out.write(entry['mime'])
         out.write(' ')
